@@ -1,0 +1,337 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// Structure for a parked vehicle
+typedef struct Vehicle {
+    char licensePlate[20];
+    time_t entryTime;
+    time_t exitTime;
+    struct Vehicle* next;
+} Vehicle;
+
+// Structure for parking lot
+typedef struct {
+    int totalSlots;
+    int occupiedSlots;
+    Vehicle** slots;
+    Vehicle* historyHead;
+} ParkingLot;
+
+// Function prototypes
+ParkingLot* createParkingLot(int totalSlots);
+void parkVehicle(ParkingLot* lot, const char* licensePlate);
+void removeVehicle(ParkingLot* lot, int slotNumber);
+void displayCurrentParking(ParkingLot* lot);
+void displayParkingHistory(ParkingLot* lot);
+void freeParkingLot(ParkingLot* lot);
+void printTimestamp(time_t t);
+void printDuration(time_t duration);
+
+int main() {
+    int choice, slotNumber, totalSlots;
+    char licensePlate[20];
+    ParkingLot* lot = NULL;
+
+    printf("Welcome to Parking Lot Management System\n");
+    printf("Enter total number of parking slots: ");
+    scanf("%d", &totalSlots);
+    lot = createParkingLot(totalSlots);
+
+    while (1) {
+        printf("\nMenu:\n");
+        printf("1. Park a vehicle\n");
+        printf("2. Remove a vehicle\n");
+        printf("3. Display current parking status\n");
+        printf("4. Display parking history\n");
+        printf("5. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                if (lot->occupiedSlots >= lot->totalSlots) {
+                    printf("Parking lot is full!\n");
+                    break;
+                }
+                printf("Enter vehicle license plate: ");
+                scanf("%s", licensePlate);
+                parkVehicle(lot, licensePlate);
+                break;
+            case 2:
+                if (lot->occupiedSlots == 0) {
+                    printf("Parking lot is empty!\n");
+                    break;
+                }
+                printf("Enter slot number to remove vehicle from: ");
+                scanf("%d", &slotNumber);
+                if (slotNumber < 1 || slotNumber > lot->totalSlots) {
+                    printf("Invalid slot number!\n");
+                    break;
+                }
+                removeVehicle(lot, slotNumber - 1);
+                break;
+            case 3:
+                displayCurrentParking(lot);
+                break;
+            case 4:
+                displayParkingHistory(lot);
+                break;
+            case 5:
+                freeParkingLot(lot);
+                printf("Exiting program. Goodbye!\n");
+                return 0;
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+    }
+
+    return 0;
+}
+
+ParkingLot* createParkingLot(int totalSlots) {
+    ParkingLot* lot = (ParkingLot*)malloc(sizeof(ParkingLot));
+    if (!lot) {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+
+    lot->totalSlots = totalSlots;
+    lot->occupiedSlots = 0;
+    lot->slots = (Vehicle**)calloc(totalSlots, sizeof(Vehicle*));
+    if (!lot->slots) {
+        printf("Memory allocation failed!\n");
+        free(lot);
+        exit(1);
+    }
+
+    lot->historyHead = NULL;
+    return lot;
+}
+
+void parkVehicle(ParkingLot* lot, const char* licensePlate) {
+    for (int i = 0; i < lot->totalSlots; i++) {
+        if (lot->slots[i] == NULL) {
+            Vehicle* newVehicle = (Vehicle*)malloc(sizeof(Vehicle));
+            if (!newVehicle) {
+                printf("Memory allocation failed!\n");
+                return;
+            }
+
+            strncpy(newVehicle->licensePlate, licensePlate, sizeof(newVehicle->licensePlate) - 1);
+            newVehicle->licensePlate[sizeof(newVehicle->licensePlate) - 1] = '\0';
+            newVehicle->entryTime = time(NULL);
+            newVehicle->exitTime = 0;
+            newVehicle->next = NULL;
+
+            lot->slots[i] = newVehicle;
+            lot->occupiedSlots++;
+            printf("Vehicle %s parked in slot %d\n", licensePlate, i + 1);
+            return;
+        }
+    }
+}
+
+void removeVehicle(ParkingLot* lot, int slotNumber) {
+    if (lot->slots[slotNumber] == NULL) {
+        printf("Slot %d is already empty!\n", slotNumber + 1);
+        return;
+    }
+
+    Vehicle* vehicle = lot->slots[slotNumber];
+    vehicle->exitTime = time(NULL);
+
+    vehicle->next = lot->historyHead;
+    lot->historyHead = vehicle;
+
+    printf("Vehicle %s removed from slot %d\n", vehicle->licensePlate, slotNumber + 1);
+    printf("Parking duration: ");
+    printDuration(vehicle->exitTime - vehicle->entryTime);
+    printf("\n");
+
+    lot->slots[slotNumber] = NULL;
+    lot->occupiedSlots--;
+}
+
+void displayCurrentParking(ParkingLot* lot) {
+    printf("\nCurrent Parking Status:\n");
+    printf("Total slots: %d, Occupied slots: %d, Available slots: %d\n",
+           lot->totalSlots, lot->occupiedSlots, lot->totalSlots - lot->occupiedSlots);
+
+    printf("\nSlot\tLicense Plate\tEntry Time\n");
+    printf("----\t------------\t-------------------\n");
+    for (int i = 0; i < lot->totalSlots; i++) {
+        printf("%d\t", i + 1);
+        if (lot->slots[i] != NULL) {
+            printf("%s\t\t", lot->slots[i]->licensePlate);
+            printTimestamp(lot->slots[i]->entryTime);
+        } else {
+            printf("Empty\t\t-");
+        }
+        printf("\n");
+    }
+}
+
+void displayParkingHistory(ParkingLot* lot) {
+    printf("\nParking History:\n");
+    printf("License Plate\tEntry Time\t\tExit Time\t\tDuration\n");
+    printf("--------------\t-------------------\t-------------------\t--------\n");
+
+    Vehicle* current = lot->historyHead;
+    while (current != NULL) {
+        printf("%s\t\t", current->licensePlate);
+        printTimestamp(current->entryTime);
+        printf("\t");
+        printTimestamp(current->exitTime);
+        printf("\t");
+        printDuration(current->exitTime - current->entryTime);
+        printf("\n");
+        current = current->next;
+    }
+}
+
+void freeParkingLot(ParkingLot* lot) {
+    for (int i = 0; i < lot->totalSlots; i++) {
+        if (lot->slots[i] != NULL) {
+            free(lot->slots[i]);
+        }
+    }
+    free(lot->slots);
+
+    Vehicle* current = lot->historyHead;
+    while (current != NULL) {
+        Vehicle* temp = current;
+        current = current->next;
+        free(temp);
+    }
+
+    free(lot);
+}
+
+// Helper function to print readable timestamps
+void printTimestamp(time_t t) {
+    if (t == 0) {
+        printf("N/A");
+        return;
+    }
+
+    char buffer[20];
+    struct tm *timeinfo = localtime(&t);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+    printf("%s", buffer);
+}
+
+// Helper function to print duration as HH:MM:SS
+void printDuration(time_t duration) {
+    int hours = duration / 3600;
+    int minutes = (duration % 3600) / 60;
+    int seconds = duration % 60;
+
+    printf("%02d:%02d:%02d", hours, minutes, seconds);
+}
+
+
+OUTPUT:
+
+
+
+Welcome to Parking Lot Management System
+Enter total number of parking slots: 3
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 1
+Enter vehicle license plate: MH01AB1234
+Vehicle MH01AB1234 parked in slot 1
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 1
+Enter vehicle license plate: KA02CD5678
+Vehicle KA02CD5678 parked in slot 2
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 3
+
+Current Parking Status:
+Total slots: 3, Occupied slots: 2, Available slots: 1
+
+Slot    License Plate      Entry Time
+----    ------------      -----------
+1       MH01AB1234        14:30:22
+2       KA02CD5678        14:31:05
+3       Empty             -
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 2
+Enter slot number to remove vehicle from: 1
+Vehicle MH01AB1234 removed from slot 1
+Parking duration: 00:05:38
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 4
+
+Parking History:
+License Plate      Entry Time           Exit Time            Duration
+------------      ----------           ---------            --------
+MH01AB1234        14:30:22             14:36:00             00:05:38
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 1
+Enter vehicle license plate: DL03EF9012
+Vehicle DL03EF9012 parked in slot 1
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 3
+
+Current Parking Status:
+Total slots: 3, Occupied slots: 2, Available slots: 1
+
+Slot    License Plate      Entry Time
+----    ------------      -----------
+1       DL03EF9012        14:37:15
+2       KA02CD5678        14:31:05
+3       Empty             -
+
+Menu:
+1. Park a vehicle
+2. Remove a vehicle
+3. Display current parking status
+4. Display parking history
+5. Exit
+Enter your choice: 5
+Exiting program. Goodbye!
